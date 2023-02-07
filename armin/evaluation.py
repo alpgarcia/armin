@@ -77,9 +77,16 @@ class NLI4CTEvaluator:
         fp = fp_p + fp_s
         fn = fn_p + fn_s
 
-        p_score = tp / (tp + fp)
+        if (tp + fp) == 0:
+            p_score = 0
+        else:
+            p_score = tp / (tp + fp)
         r_score = tp / (tp + fn)
-        score = 2 * (p_score * r_score) / (p_score + r_score)
+
+        if (p_score + r_score) == 0:
+            score = 0
+        else:
+            score = 2 * (p_score * r_score) / (p_score + r_score)
 
         return {
             "f1": score,

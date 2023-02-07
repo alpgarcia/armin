@@ -26,35 +26,40 @@ from armin.evaluation import NLI4CTEvaluator
 from armin.extractors import Baseline, OntobioSim
 
 DATASET_PATH = "./training_data/dev.json"
-RESULTS_PATH = "./results/results.json"
+BASELINE_RESULTS_PATH = "./results/baseline_results.json"
+ONTOBIO_RESULTS_PATH = "./results/ontobio_results.json"
 
 
 if __name__ == '__main__':
 
+    print("Executing baseline experiment\n")
     baseline = Baseline(DATASET_PATH, "./training_data/CT json")
 
     evidences = baseline.retrieve_evidences()
     print(evidences)
-    print("Writing results to " + RESULTS_PATH)
-    with open(RESULTS_PATH, 'w') as jsonFile:
+    print("Writing results to " + BASELINE_RESULTS_PATH)
+    with open(BASELINE_RESULTS_PATH, 'w') as jsonFile:
         jsonFile.write(json.dumps(evidences, indent=4))
 
     # Evaluate results
     evaluator = NLI4CTEvaluator(DATASET_PATH)
-    metrics = evaluator.evaluate(RESULTS_PATH)
+    metrics = evaluator.evaluate(BASELINE_RESULTS_PATH)
 
     print('BM25 F1:{:f}'.format(metrics["f1"]))
     print('BM25 precision_score:{:f}'.format(metrics["precision"]))
     print('BM25 recall_score:{:f}'.format(metrics["recall"]))
 
-    ob_sim = OntobioSim(DATASET_PATH, "./training_data/CT json")
+    print("\nExecuting Ontobio experiment:\n")
+    ob_sim = OntobioSim(DATASET_PATH, "./training_data/CT json", 0.1)
+
     evidences = ob_sim.retrieve_evidences()
-    metrics = evaluator.evaluate(RESULTS_PATH)
     print(evidences)
-    print("Writing results to " + RESULTS_PATH)
-    with open(RESULTS_PATH, 'w') as jsonFile:
+    print("Writing results to " + ONTOBIO_RESULTS_PATH)
+    with open(ONTOBIO_RESULTS_PATH, 'w') as jsonFile:
         jsonFile.write(json.dumps(evidences, indent=4))
 
+    # Evaluate results
+    metrics = evaluator.evaluate(ONTOBIO_RESULTS_PATH)
     print('Ontobio F1:{:f}'.format(metrics["f1"]))
     print('Ontobio precision_score:{:f}'.format(metrics["precision"]))
     print('Ontobio recall_score:{:f}'.format(metrics["recall"]))

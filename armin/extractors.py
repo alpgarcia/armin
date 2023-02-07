@@ -18,9 +18,11 @@
 # Authors:
 #     Alberto Pérez García-Plaza <alberto.perez@lsi.uned.es>
 #
+import datetime
 import json
 import os
 import re
+import time
 
 from ontobio import OntologyFactory
 from rank_bm25 import BM25Okapi
@@ -44,10 +46,12 @@ class Baseline:
     def __init__(self, dataset_path, ctrs_folder_path):
 
         if not os.path.exists(dataset_path):
-            raise DatasetError(cause="Dataset file %s does not exist" % dataset_path)
+            raise DatasetError(cause="Dataset file %s does not exist"
+                                     % dataset_path)
 
         if not os.path.exists(ctrs_folder_path):
-            raise CTRError(cause="CTRS folder %s does not exist" % ctrs_folder_path)
+            raise CTRError(cause="CTRS folder %s does not exist"
+                                 % ctrs_folder_path)
 
         # Load dataset
         with open(dataset_path) as dataset_file:
@@ -102,7 +106,10 @@ class Baseline:
             as a list of indexes of each sentence considered as evidence
             for the given statement.
         """
-        # TODO Add percentage of completion
+        total = len(self.dataset.keys())
+        completed = 0
+        start = time.perf_counter()
+        elapsed = 0
         results = {}
         for uuid in self.dataset.keys():
             ps_info = self.dataset[uuid]
@@ -110,19 +117,33 @@ class Baseline:
             primary_section = self._read_ctr_section(ps_info["Primary_id"],
                                                      ps_info["Section_id"])
 
-            primary_evidences = self._retrieve_section_evidences(statement,
-                                                                 primary_section)
+            primary_evidences = self._retrieve_section_evidences(
+                                                            statement,
+                                                            primary_section)
             results[uuid] = {"Primary_evidence_index": primary_evidences}
 
             # Repeat for the secondary trial
             if ps_info["Type"] == "Comparison":
-                secondary_section = self._read_ctr_section(ps_info["Secondary_id"],
-                                                           ps_info["Section_id"])
+                secondary_section = self._read_ctr_section(
+                                                ps_info["Secondary_id"],
+                                                ps_info["Section_id"])
 
-                secondary_evidences = self._retrieve_section_evidences(statement,
-                                                                       secondary_section)
+                secondary_evidences = self._retrieve_section_evidences(
+                                                            statement,
+                                                            secondary_section)
                 results[uuid]["Secondary_evidence_index"] = secondary_evidences
 
+            completed += 1
+            end = time.perf_counter()
+            elapsed = (end - start)
+            estimated = (1 / (completed/total)) * elapsed
+            print(f"\r[{uuid}] Completion: {completed}/{total} "
+                  f"Elapsed: {datetime.timedelta(seconds=round(elapsed))} - "
+                  f"Estimated: {datetime.timedelta(seconds=round(estimated))}",
+                  end='')
+
+        print(f"\rCompletion: {completed}/{total} "
+              f"Elapsed: {datetime.timedelta(seconds=round(elapsed))}")
         return results
 
     def _read_ctr_section(self, ctr_id, section_id):
@@ -146,15 +167,32 @@ class Baseline:
 
 
 class OntobioSim(Baseline):
+    """Ontobio based evidence extractor.
 
-    def __init__(self, dataset_path, ctrs_folder_path):
+        :param dataset_path: path of the dataset
+        :param ctrs_folder_path: path to the folder containing
+            the set of CTR files
+        :param threshold: similarity threshold to decide whether a
+            sentence is an evidence or not. From 0 to 1, defaults to 0.2
+
+        :raises DatasetError: when the dataset file path does not exist
+            or is not valid
+        :raises CTRError: when the CTRs folder does not exist or is not
+            valid
+        """
+
+    def __init__(self, dataset_path, ctrs_folder_path, threshold=.2):
         super().__init__(dataset_path, ctrs_folder_path)
+
+        self._threshold = threshold
 
         # Create ontology object, for GO
         # Transparently uses remote SPARQL service.
         # (May take a few seconds to run first time)
+        print("Creating ontology factory...", end='')
         o_factory = OntologyFactory()
         self.__ont = o_factory.create('go')
+        print("Done!")
 
     def _retrieve_section_evidences(self, statement, section):
         """Search evidences for the given statement within the
@@ -171,12 +209,16 @@ class OntobioSim(Baseline):
         #  tokenizing with NLTK
         statement_ents = []
         for term in statement:
-            ids = self.__ont.search(term + '%')
+            term = re.sub("\W+", ' ', term).split()
+            if not term:
+                continue
+            ids = self.__ont.search(term[0] + '%')
             if ids:
                 statement_ents.append(ids)
 
         # flatten list
-        statement_ents = [item for sublist in statement_ents for item in sublist]
+        statement_ents = \
+            [item for sublist in statement_ents for item in sublist]
 
         # compute similarity for each sentence
         section_evidences = []
@@ -195,13 +237,14 @@ class OntobioSim(Baseline):
                     sentence_ents.append(ids)
 
             # flatten list
-            sentence_ents = [item for sublist in sentence_ents for item in sublist]
+            sentence_ents = \
+                [item for sublist in sentence_ents for item in sublist]
 
             common = len(set(statement_ents) & set(sentence_ents))
             if common == 0:
                 continue
             sim = common / (len(statement_ents) + len(sentence_ents))
-            if sim > 0.5:
+            if sim > self._threshold:
                 section_evidences.append(index)
             index += 1
 
