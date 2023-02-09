@@ -21,9 +21,9 @@
 import datetime
 import json
 import os
-import re
 import time
 
+from nltk import RegexpTokenizer
 from ontobio import OntologyFactory
 from rank_bm25 import BM25Okapi
 
@@ -59,37 +59,40 @@ class Baseline:
 
         self.ctrs_folder_path = ctrs_folder_path
 
-    @staticmethod
-    def tokenize(section):
-        """ Tokenize the section entries, remove spaces, and empty entries
+        self._tokenizer = RegexpTokenizer(r"[\w']+")
 
-        :param section: content of the section to be tokenized
+    def tokenize(self, text):
+        """ Tokenize a text
+
+        :param text: text to be tokenized
         """
-        tokenized = [x.split(" ") for x in section]
-        tokenized = [[x.strip(' ') for x in y] for y in tokenized]
-        tokenized = [[x for x in y if x] for y in tokenized]
 
-        return tokenized
+        # tokenized = [x.split(" ") for x in section]
+        # tokenized = [[x.strip(' ') for x in y] for y in tokenized]
+        # tokenized = [[x for x in y if x] for y in tokenized]
+        # TODO remove stop words with NLTK.
+        tokens = self._tokenizer.tokenize(text)
 
-    @staticmethod
-    def _retrieve_section_evidences(statement, section):
+        return tokens
+
+    def _retrieve_section_evidences(self, statement_tokens, section):
         """Search evidences for the given statement within the
          given section.
 
-        :param statement: statement to be used as query to look for
-            evidences
+        :param statement_tokens: statement tokens to be used as query to look
+            for evidences
         :param section: CTR section to extract evidences from
 
         :return: list of indexes of those sentences in the section
             considered as evidences for the given statement
         """
         # create an instance of the BM25 class, which reads in the
-        # primary section tokenized text and does some indexing
-        # on it
-        bm25 = BM25Okapi(Baseline.tokenize(section))
+        # section tokenized text and does some indexing on it
+        tokenized = [self.tokenize(sent) for sent in section]
+        bm25 = BM25Okapi(tokenized)
         # Retrieve bm25 scores for the primary section using
         # the tokenized statement as a query
-        scores = bm25.get_scores(statement)
+        scores = bm25.get_scores(statement_tokens)
         # Retrieve all entries from the primary section with a bm25
         # score over 1
         section_evidences = [i for i in range(len(scores))
@@ -113,30 +116,30 @@ class Baseline:
         results = {}
         for uuid in self.dataset.keys():
             ps_info = self.dataset[uuid]
-            statement = ps_info["Statement"].split(" ")
+            statement_tokens = self.tokenize(ps_info["Statement"])
             primary_section = self._read_ctr_section(ps_info["Primary_id"],
                                                      ps_info["Section_id"])
 
             primary_evidences = self._retrieve_section_evidences(
-                                                            statement,
-                                                            primary_section)
+                    statement_tokens,
+                    primary_section)
             results[uuid] = {"Primary_evidence_index": primary_evidences}
 
             # Repeat for the secondary trial
             if ps_info["Type"] == "Comparison":
                 secondary_section = self._read_ctr_section(
-                                                ps_info["Secondary_id"],
-                                                ps_info["Section_id"])
+                        ps_info["Secondary_id"],
+                        ps_info["Section_id"])
 
                 secondary_evidences = self._retrieve_section_evidences(
-                                                            statement,
-                                                            secondary_section)
+                        statement_tokens,
+                        secondary_section)
                 results[uuid]["Secondary_evidence_index"] = secondary_evidences
 
             completed += 1
             end = time.perf_counter()
             elapsed = (end - start)
-            estimated = (1 / (completed/total)) * elapsed
+            estimated = (1 / (completed / total)) * elapsed
             print(f"\r[{uuid}] Completion: {completed}/{total} "
                   f"Elapsed: {datetime.timedelta(seconds=round(elapsed))} - "
                   f"Estimated: {datetime.timedelta(seconds=round(estimated))}",
@@ -194,25 +197,20 @@ class OntobioSim(Baseline):
         self.__ont = o_factory.create('go')
         print("Done!")
 
-    def _retrieve_section_evidences(self, statement, section):
+    def _retrieve_section_evidences(self, statement_tokens, section):
         """Search evidences for the given statement within the
          given section.
 
-        :param statement: statement to be used as query to look for
-            evidences
+        :param statement_tokens: statement tokens to be used as query to look
+            for evidences
         :param section: CTR section to extract evidences from
 
         :return: list of indexes of those sentences in the section
             considered as evidences for the given statement
         """
-        # TODO remove stop words with NLTK. Consider also
-        #  tokenizing with NLTK
         statement_ents = []
-        for term in statement:
-            term = re.sub("\W+", ' ', term).split()
-            if not term:
-                continue
-            ids = self.__ont.search(term[0] + '%')
+        for term in statement_tokens:
+            ids = self.__ont.search(term + '%')
             if ids:
                 statement_ents.append(ids)
 
@@ -225,14 +223,8 @@ class OntobioSim(Baseline):
         index = 0
         for sentence in section:
             sentence_ents = []
-            tokenized = sentence.split(' ')
-            tokenized = [x for x in tokenized if x]
-            # TODO tokenize and remove stop words with NLTK
-            for term in tokenized:
-                term = re.sub("\W+", ' ', term).split()
-                if not term:
-                    continue
-                ids = self.__ont.search(term[0] + '%')
+            for term in self.tokenize(sentence):
+                ids = self.__ont.search(term + '%')
                 if ids:
                     sentence_ents.append(ids)
 

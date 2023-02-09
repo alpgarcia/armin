@@ -30,37 +30,41 @@ BASELINE_RESULTS_PATH = "./results/baseline_results.json"
 ONTOBIO_RESULTS_PATH = "./results/ontobio_results.json"
 
 
-if __name__ == '__main__':
-
+def run_baseline():
     print("Executing baseline experiment\n")
     baseline = Baseline(DATASET_PATH, "./training_data/CT json")
-
     evidences = baseline.retrieve_evidences()
     print(evidences)
     print("Writing results to " + BASELINE_RESULTS_PATH)
     with open(BASELINE_RESULTS_PATH, 'w') as jsonFile:
         jsonFile.write(json.dumps(evidences, indent=4))
-
     # Evaluate results
     evaluator = NLI4CTEvaluator(DATASET_PATH)
     metrics = evaluator.evaluate(BASELINE_RESULTS_PATH)
-
     print('BM25 F1:{:f}'.format(metrics["f1"]))
     print('BM25 precision_score:{:f}'.format(metrics["precision"]))
     print('BM25 recall_score:{:f}'.format(metrics["recall"]))
 
+
+def run_ontobio():
     print("\nExecuting Ontobio experiment:\n")
     ob_sim = OntobioSim(DATASET_PATH, "./training_data/CT json", 0.1)
-
     evidences = ob_sim.retrieve_evidences()
     print(evidences)
     print("Writing results to " + ONTOBIO_RESULTS_PATH)
     with open(ONTOBIO_RESULTS_PATH, 'w') as jsonFile:
         jsonFile.write(json.dumps(evidences, indent=4))
-
     # Evaluate results
+    evaluator = NLI4CTEvaluator(DATASET_PATH)
     metrics = evaluator.evaluate(ONTOBIO_RESULTS_PATH)
     print('Ontobio F1:{:f}'.format(metrics["f1"]))
     print('Ontobio precision_score:{:f}'.format(metrics["precision"]))
     print('Ontobio recall_score:{:f}'.format(metrics["recall"]))
+
+
+if __name__ == '__main__':
+
+    run_baseline()
+
+    run_ontobio()
 
