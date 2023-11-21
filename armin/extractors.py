@@ -24,6 +24,7 @@ import os
 import time
 
 from nltk import RegexpTokenizer
+from nltk.corpus import stopwords
 from ontobio import OntologyFactory
 from rank_bm25 import BM25Okapi
 
@@ -61,6 +62,13 @@ class Baseline:
 
         self._tokenizer = RegexpTokenizer(r"[\w']+")
 
+        try:
+            self._stops_en = set(stopwords.words('english'))
+        except LookupError as le:
+            import nltk
+            nltk.download('stopwords')
+            self._stops_en = set(stopwords.words('english'))
+
     def tokenize(self, text):
         """ Tokenize a text
 
@@ -70,8 +78,11 @@ class Baseline:
         # tokenized = [x.split(" ") for x in section]
         # tokenized = [[x.strip(' ') for x in y] for y in tokenized]
         # tokenized = [[x for x in y if x] for y in tokenized]
-        # TODO remove stop words with NLTK.
-        tokens = self._tokenizer.tokenize(text)
+
+        tokens = self._tokenizer.tokenize(text.lower())
+
+        # Remove stopwords from text using nltk stopwords
+        tokens = [t for t in tokens if t not in self._stops_en]
 
         return tokens
 
