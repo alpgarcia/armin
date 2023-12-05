@@ -25,10 +25,9 @@ import time
 
 from nltk import RegexpTokenizer
 from nltk.corpus import stopwords
-from ontobio import OntologyFactory
 from rank_bm25 import BM25Okapi
 
-from .errors import CTRError, DatasetError
+from armin.errors import CTRError, DatasetError
 
 
 class CTRReader:
@@ -186,77 +185,3 @@ class Baseline:
         print(f"\rCompletion: {completed}/{total} "
               f"Elapsed: {datetime.timedelta(seconds=round(elapsed))}")
         return results
-
-
-class OntobioSim(Baseline):
-    """Ontobio based evidence extractor.
-
-        :param dataset_path: path of the dataset
-        :param ctrs_folder_path: path to the folder containing
-            the set of CTR files
-        :param threshold: similarity threshold to decide whether a
-            sentence is an evidence or not. From 0 to 1, defaults to 0.2
-
-        :raises DatasetError: when the dataset file path does not exist
-            or is not valid
-        :raises CTRError: when the CTRs folder does not exist or is not
-            valid
-        """
-
-    def __init__(self, dataset_path, ctrs_folder_path, threshold=.2):
-        super().__init__(dataset_path, ctrs_folder_path)
-
-        self._threshold = threshold
-
-        # Create ontology object, for GO
-        # Transparently uses remote SPARQL service.
-        # (May take a few seconds to run first time)
-        print("Creating ontology factory...", end='')
-        o_factory = OntologyFactory()
-        self.__ont = o_factory.create('go')
-        print("Done!")
-
-    def _retrieve_section_evidences(self, statement_tokens, section):
-        """Search evidences for the given statement within the
-         given section.
-
-        :param statement_tokens: statement tokens to be used as query to look
-            for evidences
-        :param section: CTR section to extract evidences from
-
-        :return: list of indexes of those sentences in the section
-            considered as evidences for the given statement
-        """
-        statement_ents = []
-        for term in statement_tokens:
-            ids = self.__ont.search(term + '%')
-            if ids:
-                statement_ents.append(ids)
-
-        # flatten list
-        statement_ents = \
-            [item for sublist in statement_ents for item in sublist]
-
-        # compute similarity for each sentence
-        section_evidences = []
-        index = 0
-        for sentence in section:
-            sentence_ents = []
-            for term in self.tokenize(sentence):
-                ids = self.__ont.search(term + '%')
-                if ids:
-                    sentence_ents.append(ids)
-
-            # flatten list
-            sentence_ents = \
-                [item for sublist in sentence_ents for item in sublist]
-
-            common = len(set(statement_ents) & set(sentence_ents))
-            if common == 0:
-                continue
-            sim = common / (len(statement_ents) + len(sentence_ents))
-            if sim > self._threshold:
-                section_evidences.append(index)
-            index += 1
-
-        return section_evidences

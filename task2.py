@@ -23,7 +23,8 @@
 import json
 
 from armin.evaluation import NLI4CTEvaluator
-from armin.extractors import Baseline, OntobioSim
+from armin.extractors.baseline import Baseline
+from armin.extractors.ontobiosim import OntobioSim
 
 DATASET_PATH = "./training_data/dev.json"
 BASELINE_RESULTS_PATH = "./results/baseline_results.json"
