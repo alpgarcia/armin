@@ -31,8 +31,38 @@ from rank_bm25 import BM25Okapi
 from .errors import CTRError, DatasetError
 
 
+class CTRReader:
+
+    def __init__(self, ctrs_folder_path):
+        if not os.path.exists(ctrs_folder_path):
+            raise CTRError(cause="CTRS folder %s does not exist"
+                                 % ctrs_folder_path)
+
+        self.ctrs_folder_path = ctrs_folder_path
+
+    def read_section(self, ctr_id, section_id):
+        """ Reads a CTR section given their identifiers
+
+        :param ctr_id: CTR identifier
+        :param section_id: identifier of the CTR section to read
+
+        :raises CTRError: when the CTR file does not exist or is not
+        valid
+        """
+        ctr_path = os.path.join(self.ctrs_folder_path, ctr_id + ".json")
+
+        if not os.path.exists(ctr_path):
+            raise CTRError(cause="CTRS file %s does not exist" % ctr_path)
+
+        with open(ctr_path) as ctr_file:
+            ctr = json.load(ctr_file)
+
+        return ctr[section_id]
+
+
 class Baseline:
-    """Baseline evidence extractor based on BM25.
+    """Baseline evidence extractor based on BM25 for
+    NLI4CT Semeval'23 task.
 
     :param dataset_path: path of the dataset
     :param ctrs_folder_path: path to the folder containing
@@ -50,21 +80,17 @@ class Baseline:
             raise DatasetError(cause="Dataset file %s does not exist"
                                      % dataset_path)
 
-        if not os.path.exists(ctrs_folder_path):
-            raise CTRError(cause="CTRS folder %s does not exist"
-                                 % ctrs_folder_path)
+        self._crt_reader = CTRReader(ctrs_folder_path)
 
         # Load dataset
         with open(dataset_path) as dataset_file:
             self.dataset = json.load(dataset_file)
 
-        self.ctrs_folder_path = ctrs_folder_path
-
         self._tokenizer = RegexpTokenizer(r"[\w']+")
 
         try:
             self._stops_en = set(stopwords.words('english'))
-        except LookupError as le:
+        except LookupError:
             import nltk
             nltk.download('stopwords')
             self._stops_en = set(stopwords.words('english'))
@@ -128,8 +154,9 @@ class Baseline:
         for uuid in self.dataset.keys():
             ps_info = self.dataset[uuid]
             statement_tokens = self.tokenize(ps_info["Statement"])
-            primary_section = self._read_ctr_section(ps_info["Primary_id"],
-                                                     ps_info["Section_id"])
+            primary_section = \
+                self._crt_reader.read_section(ps_info["Primary_id"],
+                                              ps_info["Section_id"])
 
             primary_evidences = self._retrieve_section_evidences(
                     statement_tokens,
@@ -138,7 +165,7 @@ class Baseline:
 
             # Repeat for the secondary trial
             if ps_info["Type"] == "Comparison":
-                secondary_section = self._read_ctr_section(
+                secondary_section = self._crt_reader.read_section(
                         ps_info["Secondary_id"],
                         ps_info["Section_id"])
 
@@ -159,25 +186,6 @@ class Baseline:
         print(f"\rCompletion: {completed}/{total} "
               f"Elapsed: {datetime.timedelta(seconds=round(elapsed))}")
         return results
-
-    def _read_ctr_section(self, ctr_id, section_id):
-        """ Reads a CTR given its identifier
-
-        :param ctr_id: CTR identifier
-        :param section_id: identifier of the CTR section to read
-
-        :raises CTRError: when the CTR file does not exist or is not
-        valid
-        """
-        ctr_path = os.path.join(self.ctrs_folder_path, ctr_id + ".json")
-
-        if not os.path.exists(ctr_path):
-            raise CTRError(cause="CTRS file %s does not exist" % ctr_path)
-
-        with open(ctr_path) as ctr_file:
-            ctr = json.load(ctr_file)
-
-        return ctr[section_id]
 
 
 class OntobioSim(Baseline):
