@@ -80,9 +80,6 @@ def run_passage_ranking(threshold: float) -> dict:
     # Evaluate results
     evaluator = NLI4CTEvaluator(DATASET_PATH)
     _metrics = evaluator.evaluate(PASSAGE_RANKING_RESULTS_PATH)
-    # print('PRSim F1:{:f}'.format(_metrics["f1"]))
-    # print('PRSim precision_score:{:f}'.format(_metrics["precision"]))
-    # print('PRSim recall_score:{:f}'.format(_metrics["recall"]))
 
     return _metrics
 
@@ -102,10 +99,6 @@ def run_semantic_search(threshold: float) -> dict:
     evaluator = NLI4CTEvaluator(DATASET_PATH)
     _metrics = evaluator.evaluate(SEMANTIC_SEARCH_RESULTS_PATH)
 
-    # print('SSim F1:{:f}'.format(_metrics["f1"]))
-    # print('SSim precision_score:{:f}'.format(_metrics["precision"]))
-    # print('SSim recall_score:{:f}'.format(_metrics["recall"]))
-
     return _metrics
 
 
@@ -123,10 +116,6 @@ def run_semantic_search_pubmed(threshold: float) -> dict:
     evaluator = NLI4CTEvaluator(DATASET_PATH)
     _metrics = evaluator.evaluate(SEMANTIC_SEARCH_PM_RESULTS_PATH)
 
-    print('SSimPM F1:{:f}'.format(_metrics["f1"]))
-    print('SSimPM precision_score:{:f}'.format(_metrics["precision"]))
-    print('SSimPM recall_score:{:f}'.format(_metrics["recall"]))
-
     return _metrics
 
 
@@ -139,13 +128,19 @@ def find_best_threshold(extractor: Callable[[float], dict],
     while t <= end:
         print("Testing threshold: " + str(t))
         metrics = extractor(t)
-        results.append((t, metrics["f1"]))
+        results.append((t,
+                        metrics["f1"],
+                        metrics["precision"],
+                        metrics["recall"]))
         t += step
 
     results.sort(key=lambda tup: tup[1], reverse=True)
     print("\n------\nRESULTS:\n-------")
-    for t, f1 in results:
-        print("Threshold: " + str(t) + " F1: " + str(f1))
+    for t, f1, p, r in results:
+        print("Threshold: " + str(t)
+              + " F1: " + str(f1)
+              + " Precision: " + str(p)
+              + " Recall: " + str(r))
 
     return results[0][0]
 
@@ -159,9 +154,11 @@ if __name__ == '__main__':
     # Present the thresholds based on f1 results
     # print("\nExecuting Passage Ranking experiment\n")
     # print("Finding best threshold...")
-    # best_t = find_best_threshold(run_passage_ranking,
-    #                              10, 150, 10)
-    # print("Best threshold: " + str(best_t))
+    print("\nExecuting Passage Ranking experiment\n")
+    print("Finding best threshold...")
+    best_t = find_best_threshold(run_passage_ranking,
+                                 10, 120, 10)
+    print("Best threshold: " + str(best_t))
 
     # Test different thresholds for the semantic search extractor.
     # Present the thresholds based on f1 results
